@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk.Razor">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
@@ -12,6 +12,7 @@
     <PublishProfile Condition="Exists('Properties\PublishProfiles\win-$(Platform).pubxml')">win-$(Platform).pubxml</PublishProfile>
     <UseWinUI>true</UseWinUI>
     <WinUISDKReferences>false</WinUISDKReferences>
+    <EnableDefaultContentItems>false</EnableDefaultContentItems>
     <EnableMsixTooling>true</EnableMsixTooling>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -62,6 +63,11 @@
   -->
   <ItemGroup>
     <ProjectReference Include="..\..\..\BlazorWinUI\src\BlazorWinUI\BlazorWinUI.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Remove="**/*.razor" />
+    <RazorComponent Include="**/*.razor" />
   </ItemGroup>
 
   <ItemGroup>
