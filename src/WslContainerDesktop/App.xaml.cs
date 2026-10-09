@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+using BlazorWinUI;
+
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.UI.Dispatching;
@@ -59,7 +61,12 @@ public partial class App : Application
 public App()
 {
     InitializeComponent();
-    Services = ConfigureServices();
+    var dispatcherQueue = DispatcherQueue.GetForCurrentThread()
+        ?? throw new InvalidOperationException("BlazorWinUI must be initialized on the WinUI UI thread.");
+
+    Services = ConfigureServices(dispatcherQueue);
+    Renderer = Services.GetRequiredService<WinUIRenderer>();
+    Renderer.UnhandledException += OnBlazorRendererUnhandledException;
 
     // Route otherwise-fatal, unobserved failures to the log so a crash leaves a breadcrumb.
     UnhandledException += OnUnhandledException;
@@ -77,6 +84,9 @@ public new static App Current => (App)Application.Current;
 
 /// <summary>Root dependency-injection provider used by views to resolve their view models.</summary>
 public IServiceProvider Services { get; }
+
+/// <summary>Shared BlazorWinUI renderer bound to the application's UI dispatcher.</summary>
+public WinUIRenderer Renderer { get; }
 
 /// <summary>The main shell window when it has been created; null during early startup or after teardown.</summary>
 public MainWindow? MainWindow => _window;
@@ -105,6 +115,14 @@ private void OnSessionEnded(bool ending)
 private void OnUnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
 {
     _logger?.LogCritical(e.Exception, "Unhandled UI exception: {Message}", e.Message);
+}
+
+private void OnBlazorRendererUnhandledException(object? sender, System.UnhandledExceptionEventArgs e)
+{
+    var exception = e.ExceptionObject as Exception
+        ?? new Exception($"BlazorWinUI reported an unhandled exception: {e.ExceptionObject}");
+    Services.GetRequiredService<ILogger<App>>()
+        .LogError(exception, "Unhandled exception in the BlazorWinUI renderer.");
 }
 
 protected override void OnLaunched(LaunchActivatedEventArgs args)
@@ -484,7 +502,7 @@ protected override void OnLaunched(LaunchActivatedEventArgs args)
     }
 
     /// <summary>Registers services and view models for constructor injection across the app.</summary>
-    private static ServiceProvider ConfigureServices()
+    private static ServiceProvider ConfigureServices(DispatcherQueue dispatcherQueue)
     {
         var services = new ServiceCollection();
 
@@ -508,6 +526,8 @@ protected override void OnLaunched(LaunchActivatedEventArgs args)
 #endif
             builder.AddProvider(fileLogger);
         });
+
+        services.AddBlazorWinUI(dispatcherQueue);
 
         services.AddSingleton<ISettingsService, SettingsService>();
         services.AddSingleton<ProcessRunner>();
