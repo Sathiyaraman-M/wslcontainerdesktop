@@ -680,7 +680,6 @@ protected override void OnLaunched(LaunchActivatedEventArgs args)
         services.AddSingleton<ShellViewModel>();
         services.AddSingleton<AppUpdateViewModel>();
         services.AddSingleton<DashboardViewModel>();
-        services.AddSingleton<PortsViewModel>();
         services.AddSingleton<ActivityViewModel>();
         services.AddSingleton<KubernetesViewModel>();
         services.AddTransient<K8sDetailViewModel>();

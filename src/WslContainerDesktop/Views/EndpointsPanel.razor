@@ -1,0 +1,376 @@
+@using BlazorWinUI.Components
+@using Microsoft.UI.Xaml
+@using Microsoft.UI.Xaml.Controls
+@using Microsoft.UI.Xaml.Media
+@using Windows.ApplicationModel.DataTransfer
+@using Windows.UI.Text
+@using WslContainerDesktop.Models
+@using WslContainerDesktop.Services
+@using WslContainerDesktop.Tray
+@implements IDisposable
+@inject StatusMonitor Monitor
+
+<Grid Margin="@(new Thickness(24, 16, 24, 16))"
+      RowSpacing="12"
+      RowDefinitions="@PageRows"
+      OnSizeChanged="OnRootSizeChanged">
+    <GridCell Row="0">
+        <StackPanel Spacing="2">
+            <TextBlock Text="Endpoints" FontSize="28" FontWeight="@SemiBoldWeight" />
+            <TextBlock Text="@_inventorySummary"
+                       Style="@SecondaryTextStyle"
+                       FontSize="12"
+                       TextWrapping="@(TextWrapping.Wrap)" />
+        </StackPanel>
+    </GridCell>
+
+    <GridCell Row="1">
+        <Button OnClick="Refresh">
+            <StackPanel Orientation="@(Orientation.Horizontal)" Spacing="8">
+                <FontIcon Glyph="&#xE72C;" FontSize="14" />
+                <TextBlock Text="Refresh" />
+            </StackPanel>
+        </Button>
+    </GridCell>
+
+    <GridCell Row="2">
+        <Grid RowDefinitions="@EndpointAreaRows">
+            @if (_showHeader)
+            {
+                <GridCell Row="0">
+                    <Border Style="@HeaderBorderStyle"
+                            Padding="@(new Thickness(16, 8, 20, 8))"
+                            BorderThickness="@(new Thickness(1))"
+                            CornerRadius="@(new CornerRadius(6, 6, 0, 0))">
+                        <Grid ColumnDefinitions="@EndpointColumns">
+                            <GridCell Column="0"><TextBlock Text="CONTAINER" Style="@SecondaryTextStyle" FontSize="11" /></GridCell>
+                            <GridCell Column="1"><TextBlock Text="HOST PORT" Style="@SecondaryTextStyle" FontSize="11" /></GridCell>
+                            <GridCell Column="2"><TextBlock Text="CONTAINER PORT" Style="@SecondaryTextStyle" FontSize="11" /></GridCell>
+                            <GridCell Column="3"><TextBlock Text="ADDRESS" Style="@SecondaryTextStyle" FontSize="11" /></GridCell>
+                            <GridCell Column="4"><TextBlock Text="ACTIONS" Style="@SecondaryTextStyle" FontSize="11" HorizontalTextAlignment="@(TextAlignment.Right)" /></GridCell>
+                        </Grid>
+                    </Border>
+                </GridCell>
+            }
+
+            <GridCell Row="1">
+                <Border Style="@BodyBorderStyle"
+                        BorderThickness="@(new Thickness(1, 0, 1, 1))"
+                        CornerRadius="@(new CornerRadius(0, 0, 6, 6))">
+                    <Grid>
+                        <ListView Padding="@(new Thickness(0, 4, 0, 4))"
+                                  SelectionMode="@(ListViewSelectionMode.None)">
+                            @foreach (var endpoint in _endpoints)
+                            {
+                                <ListViewItem @key="endpoint.Key"
+                                              Padding="@(_isNarrow ? new Thickness(16, 12, 16, 12) : new Thickness(16, 6, 20, 6))"
+                                              MinHeight="@(_isNarrow ? 0 : 48)"
+                                              HorizontalContentAlignment="@(HorizontalAlignment.Stretch)">
+                                    @if (_isNarrow)
+                                    {
+                                        <StackPanel Spacing="8">
+                                            <StackPanel Orientation="@(Orientation.Horizontal)" Spacing="8">
+                                                <FontIcon Glyph="&#xE7F4;" FontSize="16" Style="@AccentIconStyle" />
+                                                <TextBlock Text="@endpoint.ContainerName"
+                                                           VerticalAlignment="@(VerticalAlignment.Center)"
+                                                           FontFamily="@MonoFont"
+                                                           FontSize="13"
+                                                           TextTrimming="@(TextTrimming.CharacterEllipsis)"
+                                                           ToolTip="@endpoint.ContainerName" />
+                                            </StackPanel>
+
+                                            <Grid ColumnSpacing="8" RowSpacing="3"
+                                                  ColumnDefinitions="@NarrowColumns"
+                                                  RowDefinitions="@NarrowRows">
+                                                <GridCell Row="0" Column="0"><TextBlock Text="HOST PORT" Style="@SecondaryTextStyle" FontSize="11" /></GridCell>
+                                                <GridCell Row="0" Column="1"><TextBlock Text="@endpoint.HostPort.ToString()" FontFamily="@MonoFont" FontSize="13" /></GridCell>
+                                                <GridCell Row="1" Column="0"><TextBlock Text="CONTAINER" Style="@SecondaryTextStyle" FontSize="11" /></GridCell>
+                                                <GridCell Row="1" Column="1"><TextBlock Text="@endpoint.PortDisplay" Style="@SecondaryTextStyle" FontSize="13" /></GridCell>
+                                                <GridCell Row="2" Column="0"><TextBlock Text="ADDRESS" Style="@SecondaryTextStyle" FontSize="11" /></GridCell>
+                                                <GridCell Row="2" Column="1">
+                                                    <HyperlinkButton Content="@endpoint.HostAddress"
+                                                                     IsEnabled="@endpoint.IsHttp"
+                                                                     OnClick="@(() => Open(endpoint))"
+                                                                     AutomationName="Open in browser"
+                                                                     ToolTip="@OpenInBrowserToolTip"
+                                                                     Margin="@(new Thickness(-4, 0, 0, 0))" />
+                                                </GridCell>
+                                            </Grid>
+
+                                            <StackPanel Orientation="@(Orientation.Horizontal)" Spacing="4">
+                                                <Button Padding="@(new Thickness(7, 5, 7, 5))"
+                                                        OnClick="@(() => Open(endpoint))"
+                                                        IsEnabled="@endpoint.IsHttp"
+                                                        AutomationName="Open in browser"
+                                                        ToolTip="@OpenInBrowserToolTip">
+                                                    <FontIcon Glyph="&#xE774;" FontSize="14" />
+                                                </Button>
+                                                <Button Padding="@(new Thickness(7, 5, 7, 5))"
+                                                        OnClick="@(() => Copy(endpoint))"
+                                                        AutomationName="Copy address"
+                                                        ToolTip="@CopyAddressToolTip">
+                                                    <FontIcon Glyph="&#xE8C8;" FontSize="14" />
+                                                </Button>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    }
+                                    else
+                                    {
+                                        <Grid ColumnDefinitions="@EndpointColumns">
+                                            <GridCell Column="0">
+                                                <StackPanel Margin="@(new Thickness(0, 0, 8, 0))"
+                                                            Orientation="@(Orientation.Horizontal)"
+                                                            VerticalAlignment="@(VerticalAlignment.Center)"
+                                                            Spacing="10">
+                                                    <FontIcon Glyph="&#xE7F4;" FontSize="16" Style="@AccentIconStyle" />
+                                                    <TextBlock Text="@endpoint.ContainerName"
+                                                               VerticalAlignment="@(VerticalAlignment.Center)"
+                                                               FontFamily="@MonoFont"
+                                                               FontSize="13"
+                                                               TextTrimming="@(TextTrimming.CharacterEllipsis)"
+                                                               ToolTip="@endpoint.ContainerName" />
+                                                </StackPanel>
+                                            </GridCell>
+                                            <GridCell Column="1">
+                                                <TextBlock Text="@endpoint.HostPort.ToString()"
+                                                           VerticalAlignment="@(VerticalAlignment.Center)"
+                                                           FontFamily="@MonoFont"
+                                                           FontSize="13" />
+                                            </GridCell>
+                                            <GridCell Column="2">
+                                                <TextBlock Text="@endpoint.PortDisplay"
+                                                           VerticalAlignment="@(VerticalAlignment.Center)"
+                                                           Style="@SecondaryTextStyle"
+                                                           FontSize="13" />
+                                            </GridCell>
+                                            <GridCell Column="3">
+                                                <HyperlinkButton Content="@endpoint.HostAddress"
+                                                                 IsEnabled="@endpoint.IsHttp"
+                                                                 OnClick="@(() => Open(endpoint))"
+                                                                 AutomationName="Open in browser"
+                                                                 ToolTip="@OpenInBrowserToolTip"
+                                                                 VerticalAlignment="@(VerticalAlignment.Center)"
+                                                                 Margin="@(new Thickness(-4, 0, 0, 0))" />
+                                            </GridCell>
+                                            <GridCell Column="4">
+                                                <StackPanel Orientation="@(Orientation.Horizontal)"
+                                                            HorizontalAlignment="@(HorizontalAlignment.Right)"
+                                                            VerticalAlignment="@(VerticalAlignment.Center)"
+                                                            Spacing="4">
+                                                    <Button Padding="@(new Thickness(7, 5, 7, 5))"
+                                                            OnClick="@(() => Open(endpoint))"
+                                                            IsEnabled="@endpoint.IsHttp"
+                                                            AutomationName="Open in browser"
+                                                            ToolTip="@OpenInBrowserToolTip">
+                                                        <FontIcon Glyph="&#xE774;" FontSize="14" />
+                                                    </Button>
+                                                    <Button Padding="@(new Thickness(7, 5, 7, 5))"
+                                                            OnClick="@(() => Copy(endpoint))"
+                                                            AutomationName="Copy address"
+                                                            ToolTip="@CopyAddressToolTip">
+                                                        <FontIcon Glyph="&#xE8C8;" FontSize="14" />
+                                                    </Button>
+                                                </StackPanel>
+                                            </GridCell>
+                                        </Grid>
+                                    }
+                                </ListViewItem>
+                            }
+                        </ListView>
+
+                        @if (_endpoints.Count == 0)
+                        {
+                            <StackPanel Margin="@(new Thickness(0, 60, 0, 0))"
+                                        HorizontalAlignment="@(HorizontalAlignment.Center)"
+                                        VerticalAlignment="@(VerticalAlignment.Top)"
+                                        Spacing="8">
+                                <FontIcon Glyph="&#xE968;" FontSize="40" Style="@TertiaryIconStyle" HorizontalAlignment="@(HorizontalAlignment.Center)" />
+                                <TextBlock Text="@_emptyMessage"
+                                           Style="@SecondaryTextStyle"
+                                           TextWrapping="@(TextWrapping.Wrap)"
+                                           HorizontalTextAlignment="@(TextAlignment.Center)" />
+                            </StackPanel>
+                        }
+                    </Grid>
+                </Border>
+            </GridCell>
+        </Grid>
+    </GridCell>
+</Grid>
+
+@code {
+    [Parameter] public Style SecondaryTextStyle { get; set; } = default!;
+    [Parameter] public Style TertiaryIconStyle { get; set; } = default!;
+    [Parameter] public Style AccentIconStyle { get; set; } = default!;
+    [Parameter] public Style HeaderBorderStyle { get; set; } = default!;
+    [Parameter] public Style BodyBorderStyle { get; set; } = default!;
+
+    private static readonly IReadOnlyList<GridLength> PageRows =
+    [
+        new(1, GridUnitType.Auto),
+        new(1, GridUnitType.Auto),
+        new(1, GridUnitType.Star)
+    ];
+
+    private static readonly IReadOnlyList<GridLength> EndpointAreaRows =
+    [
+        new(1, GridUnitType.Auto),
+        new(1, GridUnitType.Star)
+    ];
+
+    private static readonly IReadOnlyList<GridLength> EndpointColumns =
+    [
+        new(1.2, GridUnitType.Star),
+        new(140, GridUnitType.Pixel),
+        new(120, GridUnitType.Pixel),
+        new(1.4, GridUnitType.Star),
+        new(92, GridUnitType.Pixel)
+    ];
+
+    private static readonly IReadOnlyList<GridLength> NarrowColumns =
+    [
+        new(96, GridUnitType.Pixel),
+        new(1, GridUnitType.Star)
+    ];
+
+    private static readonly IReadOnlyList<GridLength> NarrowRows =
+    [
+        new(1, GridUnitType.Auto),
+        new(1, GridUnitType.Auto),
+        new(1, GridUnitType.Auto)
+    ];
+
+    private static FontFamily MonoFont { get; } = new("Consolas");
+    private static FontWeight SemiBoldWeight { get; } = new() { Weight = 600 };
+    private const string OpenInBrowserToolTip = "Open in browser";
+    private const string CopyAddressToolTip = "Copy address";
+
+    private IReadOnlyList<EndpointRow> _endpoints = Array.Empty<EndpointRow>();
+    private string _signature = string.Empty;
+    private string _inventorySummary = "Every published port across your running containers, in one place.";
+    private string _emptyMessage = "No published ports. Start a container that publishes a port to see it here.";
+    private bool _showHeader;
+    private bool _isNarrow = true;
+    private bool _disposed;
+
+    protected override void OnInitialized()
+    {
+        Monitor.StatusChanged += OnStatusChanged;
+        if (Monitor.Latest is { } latest)
+        {
+            ApplySnapshot(latest);
+        }
+
+        Monitor.RequestRefresh();
+    }
+
+    private void OnStatusChanged(object? sender, EngineStatusSnapshot snapshot)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _ = InvokeAsync(() =>
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            ApplySnapshot(snapshot);
+            StateHasChanged();
+        });
+    }
+
+    private void ApplySnapshot(EngineStatusSnapshot snapshot)
+    {
+        var unavailable = snapshot.Health is not (EngineHealth.Healthy or EngineHealth.Degraded);
+        var unknown = snapshot.Containers.Count(container =>
+            container.State == ContainerState.Running && !container.PortsKnown);
+
+        _inventorySummary = unavailable
+            ? "Endpoint inventory is unavailable because the engine inventory could not be read."
+            : unknown > 0
+                ? $"Published ports are still unknown for {unknown} running container(s); the list may be incomplete."
+                : "Every published port across your running containers, in one place.";
+        _emptyMessage = unavailable || unknown > 0
+            ? _inventorySummary
+            : "No published ports. Start a container that publishes a port to see it here.";
+
+        var rows = snapshot.Containers
+            .Where(container => container.State == ContainerState.Running)
+            .SelectMany(container => container.Ports
+                .Where(port => port.HostPort > 0)
+                .Select(port => new EndpointRow(
+                    container.Name,
+                    container.Id,
+                    port.HostPort,
+                    port.ContainerPort,
+                    port.ProtocolName,
+                    port.HostUrl)))
+            .OrderBy(row => row.HostPort)
+            .ThenBy(row => row.ContainerName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        // StatusMonitor polls periodically; retaining the existing rows avoids needless native-list churn.
+        var signature = string.Join("|", rows.Select(row =>
+            $"{row.ContainerId}:{row.ContainerName}:{row.HostPort}:{row.ContainerPort}:{row.Protocol}:{row.HostUrl}"));
+        if (signature != _signature || _endpoints.Count != rows.Count)
+        {
+            _signature = signature;
+            _endpoints = rows;
+        }
+    }
+
+    private void OnRootSizeChanged(SizeChangedEventArgs args)
+    {
+        _showHeader = args.NewSize.Width >= 640;
+        _isNarrow = args.NewSize.Width < 600;
+    }
+
+    private void Refresh() => Monitor.RequestRefresh();
+
+    private static void Open(EndpointRow endpoint)
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = endpoint.HostUrl,
+                UseShellExecute = true
+            });
+        }
+        catch
+        {
+            // Ignore browser launch failures, as the native page did.
+        }
+    }
+
+    private static void Copy(EndpointRow endpoint)
+    {
+        var package = new DataPackage();
+        package.SetText(endpoint.HostAddress);
+        Clipboard.SetContent(package);
+    }
+
+    public void Dispose()
+    {
+        _disposed = true;
+        Monitor.StatusChanged -= OnStatusChanged;
+    }
+
+    private sealed record EndpointRow(
+        string ContainerName,
+        string ContainerId,
+        int HostPort,
+        int ContainerPort,
+        string Protocol,
+        string HostUrl)
+    {
+        public string Key => $"{ContainerId}:{HostPort}:{ContainerPort}:{Protocol}:{HostUrl}";
+        public string HostAddress => new Uri(HostUrl).Authority;
+        public bool IsHttp => Protocol.Equals("tcp", StringComparison.OrdinalIgnoreCase);
+        public string PortDisplay => $"{ContainerPort}/{Protocol}";
+    }
+}

@@ -14,49 +14,40 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+using BlazorWinUI;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Navigation;
-using WslContainerDesktop.ViewModels;
 
 namespace WslContainerDesktop.Views;
 
-/// <summary>Page that lists forwarded or published endpoints and provides open/copy shortcuts.</summary>
+/// <summary>Hosts the BlazorWinUI endpoint inventory component.</summary>
 public sealed partial class EndpointsPage : Page
 {
-    /// <summary>Initializes the page/control and resolves its view model from the app service provider.</summary>
     public EndpointsPage()
     {
-        ViewModel = App.Current.Services.GetRequiredService<PortsViewModel>();
         InitializeComponent();
-    }
 
-    /// <summary>Endpoint/port view model bound by the page.</summary>
-    public PortsViewModel ViewModel { get; }
-
-    protected override void OnNavigatedTo(NavigationEventArgs e)
-    {
-        base.OnNavigatedTo(e);
-        ViewModel.RefreshCommand.Execute(null);
-    }
-
-    private static PortEndpointRow? RowOf(object sender) =>
-        (sender as FrameworkElement)?.DataContext as PortEndpointRow;
-
-    private void Open_Click(object sender, RoutedEventArgs e)
-    {
-        if (RowOf(sender) is { } row)
+        RootHost.Parameters = new Dictionary<string, object?>
         {
-            ViewModel.OpenCommand.Execute(row);
-        }
+            ["SecondaryTextStyle"] = Resources["EndpointSecondaryTextStyle"],
+            ["TertiaryIconStyle"] = Resources["EndpointTertiaryIconStyle"],
+            ["AccentIconStyle"] = Resources["EndpointAccentIconStyle"],
+            ["HeaderBorderStyle"] = Resources["EndpointHeaderBorderStyle"],
+            ["BodyBorderStyle"] = Resources["EndpointBodyBorderStyle"]
+        };
     }
 
-    private void Copy_Click(object sender, RoutedEventArgs e)
+    public WinUIRenderer Renderer => ((App)Application.Current).Renderer;
+
+    public Type RootComponentType => typeof(EndpointsPanel);
+
+    private void RootHost_OnHostError(object? sender, System.UnhandledExceptionEventArgs e)
     {
-        if (RowOf(sender) is { } row)
-        {
-            ViewModel.CopyCommand.Execute(row);
-        }
+        var exception = e.ExceptionObject as Exception
+            ?? new Exception($"BlazorWinUI reported an endpoint host error: {e.ExceptionObject}");
+        App.Current.Services.GetRequiredService<ILogger<EndpointsPage>>()
+            .LogError(exception, "The Endpoints Blazor host failed.");
     }
 }
